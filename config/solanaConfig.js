@@ -1,3 +1,12 @@
+const {
+  signerIdentity,
+  createSignerFromKeypair,
+} = require("@metaplex-foundation/umi");
+const { createUmi } = require("@metaplex-foundation/umi-bundle-defaults");
+const { irysUploader } = require("@metaplex-foundation/umi-uploader-irys");
+const {
+  fromWeb3JsKeypair,
+} = require("@metaplex-foundation/umi-web3js-adapters");
 const { Connection, Keypair } = require("@solana/web3.js");
 const bs58 = require("bs58");
 
@@ -10,5 +19,8 @@ if (!secretKeyString) {
 const secretKey = bs58.default.decode(secretKeyString);
 const creatorKeyPair = Keypair.fromSecretKey(secretKey);
 const creatorPublicKey = creatorKeyPair.publicKey;
+const umi = createUmi(connection);
+const signer = createSignerFromKeypair(umi, fromWeb3JsKeypair(creatorKeyPair));
+umi.use(signerIdentity(signer, true)).use(irysUploader());
 
-module.exports = { connection, creatorPublicKey };
+module.exports = { connection, creatorKeyPair, creatorPublicKey, umi, signer };

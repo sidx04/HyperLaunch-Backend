@@ -1,3 +1,5 @@
+const fs = require("fs");
+const bs58 = require("bs58");
 const {
   SystemProgram,
   Transaction,
@@ -5,7 +7,31 @@ const {
   LAMPORTS_PER_SOL,
   Keypair,
 } = require("@solana/web3.js");
-const { connection, creatorPublicKey } = require("../config/solanaConfig");
+const {
+  connection,
+  creatorKeyPair,
+  creatorPublicKey,
+  umi,
+  signer,
+} = require("../config/solanaConfig");
+const {
+  createMint,
+  mintTo,
+  getOrCreateAssociatedTokenAccount,
+} = require("@solana/spl-token");
+const {
+  fromWeb3JsKeypair,
+  fromWeb3JsPublicKey,
+} = require("@metaplex-foundation/umi-web3js-adapters");
+const {
+  signerIdentity,
+  createSignerFromKeypair,
+} = require("@metaplex-foundation/umi");
+const { irysUploader } = require("@metaplex-foundation/umi-uploader-irys");
+const {
+  createMetadataAccountV3,
+  findMetadataPda,
+} = require("@metaplex-foundation/mpl-token-metadata");
 
 const createSolanaToken = async (tokenData, userWallet) => {
   try {
@@ -15,8 +41,91 @@ const createSolanaToken = async (tokenData, userWallet) => {
     console.log(`Creating token for: ${userPublicKey}`);
     console.log(`Creator Authority: ${creatorPublicKey}`);
 
+    const mint = await createMint(
+      connection,
+      creatorKeyPair,
+      creatorPublicKey,
+      creatorPublicKey,
+      tokenData.decimals
+    );
+
+    // umi format
+    const umiMint = fromWeb3JsPublicKey(mint);
+
+    const metaData = {
+      name: tokenData.tokenName,
+      symbol: tokenData.tokenSymbol,
+      description: tokenData.description,
+      image: tokenData.imageUri,
+      properties: {
+        files: [
+          {
+            uri: tokenData.imageUri, // Same Irys URI here
+            type: "image/png", // or detect from mimetype
+          },
+        ],
+      },
+      attributes: [],
+    };
+
+    const metadataUri = await umi.uploader.uploadJson({
+      ...metaData,
+      seller_fee_basis_points: 0,
+    });
+    console.log(`Metadata URI: ${metadataUri}`);
+
+    const metaDataTransaction = await createMetadataAccountV3(umi, {
+      mint: umiMint,
+      mintAuthority: signer,
+      updateAuthority: signer.publicKey,
+      data: {
+        ...metaData,
+        uri: metadataUri,
+        creators: [
+          {
+            address: creatorPublicKey,
+            verified: true,
+            share: 100,
+          },
+        ],
+        collection: null,
+        uses: null,
+      },
+      isMutable: true,
+      collectionDetails: null,
+    }).sendAndConfirm(umi);
+
+    console.log(
+      `Metadata Transaction Signature: ${bs58.default.encode(
+        metaDataTransaction.signature
+      )}`
+    );
+
+    // Mint tokens
+    const tokenAccount = await getOrCreateAssociatedTokenAccount(
+      connection,
+      creatorKeyPair,
+      mint,
+      new PublicKey(userWallet)
+    );
+    console.log(`Token Account: ${tokenAccount}`);
+
+    const mintSig = await mintTo(
+      connection,
+      creatorKeyPair,
+      mint,
+      tokenAccount.address,
+      creatorKeyPair.publicKey,
+      tokenData.supply * LAMPORTS_PER_SOL
+    );
+
+    console.log(`Mint Signature: ${mintSig}`);
+
     return {
-      tokenData,
+      mint: mint.toBase58(),
+      metadata: findMetadataPda(umi, { mint: umiMint }).toString(),
+      metadataUri,
+      transactionId: metaDataTransaction.signature,
     };
   } catch (error) {
     console.error("Token creation failed:", error);
@@ -24,6 +133,7 @@ const createSolanaToken = async (tokenData, userWallet) => {
   }
 };
 
+// route logic
 const createTokenTx = async (req, res) => {
   try {
     const { publicKey } = req.body;
@@ -62,6 +172,40 @@ const createTokenTx = async (req, res) => {
   }
 };
 
+// upload to irys function
+const uploadImageToIrys = async (file) => {
+  try {
+    const fileSize = fs.statSync(file.path).size;
+
+    console.log(`Image path: ${file.path}`);
+
+    // Ensure fileSize is an integer
+    if (typeof fileSize !== "number" || !Number.isInteger(fileSize)) {
+      throw new Error("File size must be an integer");
+    }
+
+    // Create a readable stream from the file
+    const fileStream = fs.readFileSync(file.path);
+
+    // Prepare the file object for Irys
+    const fileObject = {
+      buffer: fileStream,
+      name: file.filename, // Use the file name
+      type: file.mimetype || "image/png", // Use the MIME type from multer
+      size: fileSize, // Explicitly pass the file size as an integer
+    };
+
+    // Upload the file to Irys
+    const imageUri = await umi.uploader.upload([fileObject]); // Pass as an array
+    console.log(`Image URI: ${imageUri}`);
+    return imageUri;
+  } catch (error) {
+    console.error("Failed to upload image to Irys:", error);
+    throw error;
+  }
+};
+
+// route logic
 const createToken = async (req, res) => {
   try {
     const {
@@ -115,7 +259,25 @@ const createToken = async (req, res) => {
 
     console.log("SOL transfer confirmed. Proceeding to create token...");
 
-    const imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
+    // Upload image to Irys
+    // if (!imageFile) {
+    //   return res.status(400).json({ error: "No image uploaded" });
+    // }
+    // const imageBuffer = fs.readFileSync(imageFile.path);
+
+    // const imageUri = await umi.uploader.upload(imageBuffer, {
+    //   name: imageFile.filename,
+    //   contentType: imageFile.mimetype,
+    // });
+
+    // // Cleanup local file
+    // fs.unlinkSync(imageFile.path);
+
+    const imageFile = req.file;
+    const imageUri = await uploadImageToIrys(imageFile);
+    fs.unlinkSync(imageFile.path);
+
+    // const imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
 
     const tokenData = {
       tokenName,
@@ -126,7 +288,7 @@ const createToken = async (req, res) => {
       checkFreeze: checkFreeze === "true",
       checkMint: checkMint === "true",
       checkRevoke: checkRevoke === "true",
-      imageUrl,
+      imageUri,
     };
 
     const tokenCreationResult = await createSolanaToken(tokenData, publicKey);
