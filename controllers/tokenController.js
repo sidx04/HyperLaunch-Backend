@@ -179,20 +179,17 @@ const uploadImageToIrys = async (file) => {
 
     console.log(`Image path: ${file.path}`);
 
-    // Ensure fileSize is an integer
     if (typeof fileSize !== "number" || !Number.isInteger(fileSize)) {
       throw new Error("File size must be an integer");
     }
 
-    // Create a readable stream from the file
     const fileStream = fs.readFileSync(file.path);
 
-    // Prepare the file object for Irys
     const fileObject = {
       buffer: fileStream,
-      name: file.filename, // Use the file name
-      type: file.mimetype || "image/png", // Use the MIME type from multer
-      size: fileSize, // Explicitly pass the file size as an integer
+      name: file.filename,
+      type: file.mimetype || "image/png",
+      size: fileSize,
     };
 
     // Upload the file to Irys
