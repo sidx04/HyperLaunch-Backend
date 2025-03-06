@@ -44,8 +44,9 @@ const createSolanaToken = async (tokenData, userWallet) => {
     const mint = await createMint(
       connection,
       creatorKeyPair,
+      // tokenData.checkMint ? null : creatorPublicKey,
       creatorPublicKey,
-      tokenData.checkFreeze ? userPublicKey : null,
+      tokenData.checkFreeze ? null : userPublicKey,
       tokenData.decimals
     );
 
