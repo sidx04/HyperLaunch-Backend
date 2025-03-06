@@ -44,8 +44,8 @@ const createSolanaToken = async (tokenData, userWallet) => {
     const mint = await createMint(
       connection,
       creatorKeyPair,
-      creatorPublicKey,
-      creatorPublicKey,
+      tokenData.checkMint ? userPublicKey : null,
+      tokenData.checkFreeze ? userPublicKey : null,
       tokenData.decimals
     );
 
@@ -76,8 +76,8 @@ const createSolanaToken = async (tokenData, userWallet) => {
 
     const metaDataTransaction = await createMetadataAccountV3(umi, {
       mint: umiMint,
-      mintAuthority: signer,
-      updateAuthority: signer.publicKey,
+      mintAuthority: tokenData.checkMint ? userPublicKey : null,
+      updateAuthority: tokenData.checkUpdate ? userPublicKey : null,
       data: {
         ...metaData,
         uri: metadataUri,
@@ -136,7 +136,14 @@ const createSolanaToken = async (tokenData, userWallet) => {
 // route logic
 const createTokenTx = async (req, res) => {
   try {
-    const { publicKey } = req.body;
+    const { publicKey, checkFreeze, checkMint, checkUpdate } = req.body;
+    const tokenCreateOptions = {
+      publicKey,
+      checkFreeze,
+      checkMint,
+      checkUpdate,
+    };
+    console.log(`Token Data: ${JSON.stringify(tokenCreateOptions, null, 2)}$`);
 
     if (!publicKey) {
       return res.status(400).json({ error: "Missing publicKey" });
@@ -144,11 +151,20 @@ const createTokenTx = async (req, res) => {
 
     const userPublicKey = new PublicKey(publicKey);
 
+    // base tx
+    let totalLamports = 0.1 * LAMPORTS_PER_SOL; // Base 0.1 SOL
+
+    if (checkFreeze === true) totalLamports += 0.1 * LAMPORTS_PER_SOL;
+    if (checkMint === true) totalLamports += 0.1 * LAMPORTS_PER_SOL;
+    if (checkUpdate === true) totalLamports += 0.1 * LAMPORTS_PER_SOL;
+
+    console.log(`Payable Fee: ${totalLamports}`);
+
     const transaction = new Transaction().add(
       SystemProgram.transfer({
         fromPubkey: userPublicKey,
         toPubkey: creatorPublicKey,
-        lamports: 0.1 * LAMPORTS_PER_SOL,
+        lamports: totalLamports,
       })
     );
 
@@ -213,7 +229,7 @@ const createToken = async (req, res) => {
       description,
       checkFreeze,
       checkMint,
-      checkRevoke,
+      checkUpdate,
       publicKey,
       signedTransaction,
     } = req.body;
@@ -256,25 +272,9 @@ const createToken = async (req, res) => {
 
     console.log("SOL transfer confirmed. Proceeding to create token...");
 
-    // Upload image to Irys
-    // if (!imageFile) {
-    //   return res.status(400).json({ error: "No image uploaded" });
-    // }
-    // const imageBuffer = fs.readFileSync(imageFile.path);
-
-    // const imageUri = await umi.uploader.upload(imageBuffer, {
-    //   name: imageFile.filename,
-    //   contentType: imageFile.mimetype,
-    // });
-
-    // // Cleanup local file
-    // fs.unlinkSync(imageFile.path);
-
     const imageFile = req.file;
     const imageUri = await uploadImageToIrys(imageFile);
     fs.unlinkSync(imageFile.path);
-
-    // const imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
 
     const tokenData = {
       tokenName,
@@ -284,7 +284,7 @@ const createToken = async (req, res) => {
       description,
       checkFreeze: checkFreeze === "true",
       checkMint: checkMint === "true",
-      checkRevoke: checkRevoke === "true",
+      checkUpdate: checkUpdate === "true",
       imageUri,
     };
 
