@@ -45,7 +45,7 @@ const createSolanaToken = async (tokenData, userWallet) => {
       connection,
       creatorKeyPair,
       creatorPublicKey,
-      creatorPublicKey,
+      tokenData.checkFreeze ? userPublicKey : null,
       tokenData.decimals
     );
 
