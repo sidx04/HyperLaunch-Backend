@@ -18,6 +18,8 @@ const {
   createMint,
   mintTo,
   getOrCreateAssociatedTokenAccount,
+  setAuthority,
+  AuthorityType,
 } = require("@solana/spl-token");
 const {
   fromWeb3JsKeypair,
@@ -31,6 +33,7 @@ const { irysUploader } = require("@metaplex-foundation/umi-uploader-irys");
 const {
   createMetadataAccountV3,
   findMetadataPda,
+  updateMetadataAccountV2,
 } = require("@metaplex-foundation/mpl-token-metadata");
 
 const createSolanaToken = async (tokenData, userWallet) => {
@@ -44,7 +47,6 @@ const createSolanaToken = async (tokenData, userWallet) => {
     const mint = await createMint(
       connection,
       creatorKeyPair,
-      // tokenData.checkMint ? null : creatorPublicKey,
       creatorPublicKey,
       tokenData.checkFreeze ? null : userPublicKey,
       tokenData.decimals
@@ -107,7 +109,7 @@ const createSolanaToken = async (tokenData, userWallet) => {
       connection,
       creatorKeyPair,
       mint,
-      new PublicKey(userWallet)
+      userPublicKey
     );
     console.log(`Token Account: ${tokenAccount}`);
 
@@ -121,6 +123,32 @@ const createSolanaToken = async (tokenData, userWallet) => {
     );
 
     console.log(`Mint Signature: ${mintSig}`);
+
+    if (tokenData.checkMint) {
+      await setAuthority(
+        connection,
+        creatorKeyPair,
+        mint,
+        creatorKeyPair,
+        AuthorityType.MintTokens,
+        null
+      );
+      console.log("Mint authority revoked permanently");
+    }
+
+    // revoke authority
+    if (tokenData.checkUpdate) {
+      const metadataPDA = findMetadataPda(umi, { mint: umiMint });
+
+      await updateMetadataAccountV2(umi, {
+        metadata: metadataPDA,
+        updateAuthority: signer.publicKey, // Current update authority (creator)
+        newUpdateAuthority: null, // Revoke update authority
+        primarySaleHappened: null,
+        isMutable: false, // Make metadata immutable
+        data: null, // No changes to metadata
+      }).sendAndConfirm(umi);
+    }
 
     return {
       mint: mint.toBase58(),
