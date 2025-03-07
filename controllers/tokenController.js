@@ -1,166 +1,14 @@
 const fs = require("fs");
-const bs58 = require("bs58");
 const {
   SystemProgram,
   Transaction,
   PublicKey,
   LAMPORTS_PER_SOL,
-  Keypair,
 } = require("@solana/web3.js");
-const {
-  connection,
-  creatorKeyPair,
-  creatorPublicKey,
-  umi,
-  signer,
-} = require("../config/solanaConfig");
-const {
-  createMint,
-  mintTo,
-  getOrCreateAssociatedTokenAccount,
-  setAuthority,
-  AuthorityType,
-} = require("@solana/spl-token");
-const {
-  fromWeb3JsKeypair,
-  fromWeb3JsPublicKey,
-} = require("@metaplex-foundation/umi-web3js-adapters");
-const {
-  signerIdentity,
-  createSignerFromKeypair,
-} = require("@metaplex-foundation/umi");
-const { irysUploader } = require("@metaplex-foundation/umi-uploader-irys");
-const {
-  createMetadataAccountV3,
-  findMetadataPda,
-  updateMetadataAccountV2,
-} = require("@metaplex-foundation/mpl-token-metadata");
+const { connection, creatorPublicKey } = require("../config/solanaConfig");
 
-const createSolanaToken = async (tokenData, userWallet) => {
-  try {
-    // Token creation logic will go here.
-    const userPublicKey = new PublicKey(userWallet);
-
-    console.log(`Creating token for: ${userPublicKey}`);
-    console.log(`Creator Authority: ${creatorPublicKey}`);
-
-    const mint = await createMint(
-      connection,
-      creatorKeyPair,
-      creatorPublicKey,
-      tokenData.checkFreeze ? null : userPublicKey,
-      tokenData.decimals
-    );
-
-    // umi format
-    const umiMint = fromWeb3JsPublicKey(mint);
-
-    const metaData = {
-      name: tokenData.tokenName,
-      symbol: tokenData.tokenSymbol,
-      description: tokenData.description,
-      image: tokenData.imageUri,
-      properties: {
-        files: [
-          {
-            uri: tokenData.imageUri, // Same Irys URI here
-            type: "image/png", // or detect from mimetype
-          },
-        ],
-      },
-      attributes: [],
-    };
-
-    const metadataUri = await umi.uploader.uploadJson({
-      ...metaData,
-      seller_fee_basis_points: 0,
-    });
-    console.log(`Metadata URI: ${metadataUri}`);
-
-    const metaDataTransaction = await createMetadataAccountV3(umi, {
-      mint: umiMint,
-      mintAuthority: signer,
-      updateAuthority: signer.publicKey,
-      data: {
-        ...metaData,
-        uri: metadataUri,
-        creators: [
-          {
-            address: creatorPublicKey,
-            verified: true,
-            share: 100,
-          },
-        ],
-        collection: null,
-        uses: null,
-      },
-      isMutable: true,
-      collectionDetails: null,
-    }).sendAndConfirm(umi);
-
-    console.log(
-      `Metadata Transaction Signature: ${bs58.default.encode(
-        metaDataTransaction.signature
-      )}`
-    );
-
-    // Mint tokens
-    const tokenAccount = await getOrCreateAssociatedTokenAccount(
-      connection,
-      creatorKeyPair,
-      mint,
-      userPublicKey
-    );
-    console.log(`Token Account: ${tokenAccount}`);
-
-    const mintSig = await mintTo(
-      connection,
-      creatorKeyPair,
-      mint,
-      tokenAccount.address,
-      creatorKeyPair.publicKey,
-      tokenData.supply * LAMPORTS_PER_SOL
-    );
-
-    console.log(`Mint Signature: ${mintSig}`);
-
-    if (tokenData.checkMint) {
-      await setAuthority(
-        connection,
-        creatorKeyPair,
-        mint,
-        creatorKeyPair,
-        AuthorityType.MintTokens,
-        null
-      );
-      console.log("Mint authority revoked permanently");
-    }
-
-    // revoke authority
-    if (tokenData.checkUpdate) {
-      const metadataPDA = findMetadataPda(umi, { mint: umiMint });
-
-      await updateMetadataAccountV2(umi, {
-        metadata: metadataPDA,
-        updateAuthority: signer.publicKey, // Current update authority (creator)
-        newUpdateAuthority: null, // Revoke update authority
-        primarySaleHappened: null,
-        isMutable: false, // Make metadata immutable
-        data: null, // No changes to metadata
-      }).sendAndConfirm(umi);
-    }
-
-    return {
-      mint: mint.toBase58(),
-      metadata: findMetadataPda(umi, { mint: umiMint }).toString(),
-      metadataUri,
-      transactionId: metaDataTransaction.signature,
-    };
-  } catch (error) {
-    console.error("Token creation failed:", error);
-    throw error;
-  }
-};
+const { uploadImageToIrys } = require("../middleware/irysUpload");
+const { createSolanaToken } = require("../middleware/createToken");
 
 // route logic
 const createTokenTx = async (req, res) => {
@@ -214,36 +62,6 @@ const createTokenTx = async (req, res) => {
   } catch (error) {
     console.error("Error creating transaction:", error);
     res.status(500).json({ error: "Failed to create transaction" });
-  }
-};
-
-// upload to irys function
-const uploadImageToIrys = async (file) => {
-  try {
-    const fileSize = fs.statSync(file.path).size;
-
-    console.log(`Image path: ${file.path}`);
-
-    if (typeof fileSize !== "number" || !Number.isInteger(fileSize)) {
-      throw new Error("File size must be an integer");
-    }
-
-    const fileStream = fs.readFileSync(file.path);
-
-    const fileObject = {
-      buffer: fileStream,
-      name: file.filename,
-      type: file.mimetype || "image/png",
-      size: fileSize,
-    };
-
-    // Upload the file to Irys
-    const imageUri = await umi.uploader.upload([fileObject]); // Pass as an array
-    console.log(`Image URI: ${imageUri}`);
-    return imageUri;
-  } catch (error) {
-    console.error("Failed to upload image to Irys:", error);
-    throw error;
   }
 };
 
@@ -301,25 +119,9 @@ const createToken = async (req, res) => {
 
     console.log("SOL transfer confirmed. Proceeding to create token...");
 
-    // Upload image to Irys
-    // if (!imageFile) {
-    //   return res.status(400).json({ error: "No image uploaded" });
-    // }
-    // const imageBuffer = fs.readFileSync(imageFile.path);
-
-    // const imageUri = await umi.uploader.upload(imageBuffer, {
-    //   name: imageFile.filename,
-    //   contentType: imageFile.mimetype,
-    // });
-
-    // // Cleanup local file
-    // fs.unlinkSync(imageFile.path);
-
     const imageFile = req.file;
     const imageUri = await uploadImageToIrys(imageFile);
     fs.unlinkSync(imageFile.path);
-
-    // const imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
 
     const tokenData = {
       tokenName,
