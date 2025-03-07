@@ -9,6 +9,7 @@ const { Connection, Keypair } = require("@solana/web3.js");
 
 const tokenRoutes = require("./routes/tokenRoute");
 const walletRoutes = require("./routes/walletRoute");
+const { logger } = require("./config/solanaConfig");
 
 const app = express();
 
@@ -35,4 +36,4 @@ app.use("/", tokenRoutes);
 app.use("/", walletRoutes);
 
 // Start Server
-app.listen(8080, () => console.log("Server running on http://localhost:8080"));
+app.listen(8080, () => logger.info("Server running on http://localhost:8080"));

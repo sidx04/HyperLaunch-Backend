@@ -5,7 +5,11 @@ const {
   PublicKey,
   LAMPORTS_PER_SOL,
 } = require("@solana/web3.js");
-const { connection, creatorPublicKey } = require("../config/solanaConfig");
+const {
+  connection,
+  creatorPublicKey,
+  logger,
+} = require("../config/solanaConfig");
 
 const { uploadImageToIrys } = require("../middleware/irysUpload");
 const { createSolanaToken } = require("../middleware/createToken");
@@ -20,7 +24,7 @@ const createTokenTx = async (req, res) => {
       checkMint,
       checkUpdate,
     };
-    console.log(`Token Data: ${JSON.stringify(tokenCreateOptions, null, 2)}$`);
+    logger.info(`Token Data: ${JSON.stringify(tokenCreateOptions, null, 2)}$`);
 
     if (!publicKey) {
       return res.status(400).json({ error: "Missing publicKey" });
@@ -35,7 +39,7 @@ const createTokenTx = async (req, res) => {
     if (checkMint === true) totalLamports += 0.1 * LAMPORTS_PER_SOL;
     if (checkUpdate === true) totalLamports += 0.1 * LAMPORTS_PER_SOL;
 
-    console.log(`Payable Fee: ${totalLamports}`);
+    logger.info(`Payable Fee: ${totalLamports}`);
 
     const transaction = new Transaction().add(
       SystemProgram.transfer({
@@ -60,7 +64,7 @@ const createTokenTx = async (req, res) => {
       lastValidBlockHeight,
     });
   } catch (error) {
-    console.error("Error creating transaction:", error);
+    logger.error("Error creating transaction:", error);
     res.status(500).json({ error: "Failed to create transaction" });
   }
 };
@@ -117,7 +121,7 @@ const createToken = async (req, res) => {
       ).lastValidBlockHeight,
     });
 
-    console.log("SOL transfer confirmed. Proceeding to create token...");
+    logger.info("SOL transfer confirmed. Proceeding to create token...");
 
     const imageFile = req.file;
     const imageUri = await uploadImageToIrys(imageFile);
@@ -143,7 +147,7 @@ const createToken = async (req, res) => {
       ...tokenCreationResult,
     });
   } catch (error) {
-    console.error("Error creating token:", error);
+    logger.error("Error creating token:", error);
     res.status(500).json({
       error: "Failed to create token",
       details: error.message,

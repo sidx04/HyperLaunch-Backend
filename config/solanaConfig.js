@@ -9,6 +9,7 @@ const {
 } = require("@metaplex-foundation/umi-web3js-adapters");
 const { Connection, Keypair } = require("@solana/web3.js");
 const bs58 = require("bs58");
+const logger = require("custom-logger").config({ level: 0 });
 
 const connection = new Connection("https://api.devnet.solana.com", "confirmed");
 
@@ -23,4 +24,11 @@ const umi = createUmi(connection);
 const signer = createSignerFromKeypair(umi, fromWeb3JsKeypair(creatorKeyPair));
 umi.use(signerIdentity(signer, true)).use(irysUploader());
 
-module.exports = { connection, creatorKeyPair, creatorPublicKey, umi, signer };
+module.exports = {
+  connection,
+  creatorKeyPair,
+  creatorPublicKey,
+  umi,
+  signer,
+  logger,
+};

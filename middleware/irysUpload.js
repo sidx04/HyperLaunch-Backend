@@ -1,11 +1,11 @@
 const fs = require("fs");
-const { umi } = require("../config/solanaConfig");
+const { umi, logger } = require("../config/solanaConfig");
 
 const uploadImageToIrys = async (file) => {
   try {
     const fileSize = fs.statSync(file.path).size;
 
-    console.log(`Image path: ${file.path}`);
+    logger.info(`Image path: ${file.path}`);
 
     if (typeof fileSize !== "number" || !Number.isInteger(fileSize)) {
       throw new Error("File size must be an integer");
@@ -22,10 +22,10 @@ const uploadImageToIrys = async (file) => {
 
     // Upload the file to Irys
     const imageUri = await umi.uploader.upload([fileObject]);
-    console.log(`Image URI: ${imageUri}`);
+    logger.info(`Image URI: ${imageUri}`);
     return imageUri;
   } catch (error) {
-    console.error("Failed to upload image to Irys:", error);
+    logger.error("Failed to upload image to Irys:", error);
     throw error;
   }
 };

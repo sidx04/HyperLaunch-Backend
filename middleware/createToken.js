@@ -16,6 +16,7 @@ const {
   creatorPublicKey,
   umi,
   signer,
+  logger,
 } = require("../config/solanaConfig");
 const {
   createMetadataAccountV3,
@@ -58,10 +59,10 @@ const createSolanaToken = async (tokenData, userWallet) => {
       ...metaData,
       seller_fee_basis_points: 0,
     });
-    console.log(`Metadata URI: ${metadataUri}`);
+    logger.info(`Metadata URI: ${metadataUri}`);
 
     const initialUpdateAuthority = tokenData.checkUpdate
-      ? signer.publicKey
+      ? undefined
       : userUmiPublicKey;
 
     const metaDataTransaction = await createMetadataAccountV3(umi, {
@@ -95,7 +96,7 @@ const createSolanaToken = async (tokenData, userWallet) => {
       collectionDetails: null,
     }).sendAndConfirm(umi);
 
-    console.log(
+    logger.info(
       `Metadata Transaction Signature: ${bs58.default.encode(
         metaDataTransaction.signature
       )}`
@@ -107,7 +108,7 @@ const createSolanaToken = async (tokenData, userWallet) => {
       mint,
       userPublicKey
     );
-    console.log(`Token Account: ${tokenAccount.address.toBase58()}`);
+    logger.info(`Token Account: ${tokenAccount.address.toBase58()}`);
 
     const mintSig = await mintTo(
       connection,
@@ -118,7 +119,7 @@ const createSolanaToken = async (tokenData, userWallet) => {
       tokenData.supply * LAMPORTS_PER_SOL
     );
 
-    console.log(`Mint Signature: ${mintSig}`);
+    logger.info(`Mint Signature: ${mintSig}`);
 
     if (!tokenData.checkMint) {
       await setAuthority(
@@ -129,7 +130,7 @@ const createSolanaToken = async (tokenData, userWallet) => {
         AuthorityType.MintTokens,
         userPublicKey
       );
-      console.log("Mint authority transferred to user");
+      logger.info("Mint authority transferred to user");
     } else {
       await setAuthority(
         connection,
@@ -139,7 +140,7 @@ const createSolanaToken = async (tokenData, userWallet) => {
         AuthorityType.MintTokens,
         null
       );
-      console.log("Mint authority revoked!");
+      logger.info("Mint authority revoked!");
     }
 
     if (tokenData.checkUpdate) {
@@ -147,14 +148,14 @@ const createSolanaToken = async (tokenData, userWallet) => {
 
       await updateMetadataAccountV2(umi, {
         metadata: metadataPDA,
-        updateAuthority: signer.publicKey,
+        updateAuthority: initialUpdateAuthority,
         newUpdateAuthority: null,
         primarySaleHappened: null,
         isMutable: false,
         data: null,
       }).sendAndConfirm(umi);
 
-      console.log("Update authority revoked and metadata made immutable");
+      logger.info("Update authority revoked and metadata made immutable");
     }
 
     return {
@@ -164,10 +165,10 @@ const createSolanaToken = async (tokenData, userWallet) => {
       transactionId: metaDataTransaction.signature,
     };
   } catch (error) {
-    console.error("Token creation failed:", error);
+    logger.error("Token creation failed:", error);
 
     if (error.transactionLogs) {
-      console.error("Transaction Logs:", error.transactionLogs.join("\n"));
+      logger.error("Transaction Logs:", error.transactionLogs.join("\n"));
     }
 
     throw error;
