@@ -1,3 +1,5 @@
+const { logger } = require("../config/solanaConfig");
+
 const connectWallet = (req, res) => {
   const { publicKey } = req.body;
   if (!publicKey) {
