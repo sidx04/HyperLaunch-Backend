@@ -44,6 +44,26 @@ const createSolanaToken = async (tokenData, userWallet) => {
       symbol: tokenData.tokenSymbol,
       description: tokenData.description,
       image: tokenData.imageUri,
+      extensions: {
+        twitter: tokenData.twitterUrl,
+        telegram: tokenData.telegramUrl,
+        website: tokenData.websiteUrl,
+      },
+      creators: tokenData.checkUpdate
+        ? [
+            {
+              address: creatorPublicKey,
+              verified: true, // Creator is verified if they are the update authority
+              share: 100,
+            },
+          ]
+        : [
+            {
+              address: creatorPublicKey,
+              verified: false, // Creator is NOT verified if user is the update authority
+              share: 100,
+            },
+          ],
       properties: {
         files: [
           {

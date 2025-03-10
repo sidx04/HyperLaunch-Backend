@@ -35,9 +35,9 @@ const createTokenTx = async (req, res) => {
     // base tx
     let totalLamports = 0.1 * LAMPORTS_PER_SOL; // Base 0.1 SOL
 
-    if (checkFreeze === true) totalLamports += 0.1 * LAMPORTS_PER_SOL;
-    if (checkMint === true) totalLamports += 0.1 * LAMPORTS_PER_SOL;
-    if (checkUpdate === true) totalLamports += 0.1 * LAMPORTS_PER_SOL;
+    if (checkFreeze === true) totalLamports += 0.05 * LAMPORTS_PER_SOL;
+    if (checkMint === true) totalLamports += 0.05 * LAMPORTS_PER_SOL;
+    if (checkUpdate === true) totalLamports += 0.05 * LAMPORTS_PER_SOL;
 
     logger.info(`Payable Fee: ${totalLamports}`);
 
@@ -81,6 +81,9 @@ const createToken = async (req, res) => {
       checkFreeze,
       checkMint,
       checkUpdate,
+      twitterUrl,
+      telegramUrl,
+      websiteUrl,
       publicKey,
       signedTransaction,
     } = req.body;
@@ -136,6 +139,9 @@ const createToken = async (req, res) => {
       checkFreeze: checkFreeze === "true",
       checkMint: checkMint === "true",
       checkUpdate: checkUpdate === "true",
+      twitterUrl,
+      telegramUrl,
+      websiteUrl,
       imageUri,
     };
 
