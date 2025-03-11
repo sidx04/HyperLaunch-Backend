@@ -11,7 +11,10 @@ const { Connection, Keypair } = require("@solana/web3.js");
 const bs58 = require("bs58");
 const logger = require("custom-logger").config({ level: 0 });
 
-const connection = new Connection("https://api.devnet.solana.com", "confirmed");
+const connection = new Connection(
+  "https://api.mainnet.solana.com",
+  "confirmed"
+);
 
 const secretKeyString = process.env.WALLET_SECRET_KEY;
 if (!secretKeyString) {
