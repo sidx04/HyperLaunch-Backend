@@ -12,7 +12,7 @@ const bs58 = require("bs58");
 const logger = require("custom-logger").config({ level: 0 });
 
 const connection = new Connection(
-  "https://api.mainnet.solana.com",
+  "https://api.mainnet-beta.solana.com",
   "confirmed"
 );
 
