@@ -16,7 +16,7 @@ const app = express();
 // Middleware
 app.use(
   cors({
-    origin: "http://localhost:5173",
+    origin: process.env.FRONTEND_URI,
     credentials: true,
   })
 );
@@ -36,4 +36,7 @@ app.use("/", tokenRoutes);
 app.use("/", walletRoutes);
 
 // Start Server
-app.listen(8080, () => logger.info("Server running on http://localhost:8080"));
+const PORT = process.env.PORT || 8080;
+app.listen(PORT, () =>
+  logger.info(`Server running on http://localhost:${PORT}`)
+);
